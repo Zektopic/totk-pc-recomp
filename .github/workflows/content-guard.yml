@@ -3,12 +3,15 @@ name: Content guard
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, manupa-hnx]
     steps:
       - uses: actions/checkout@v4
+      - name: Configure Git safe directory
+        run: git config --global --add safe.directory '*'
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
