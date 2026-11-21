@@ -36,9 +36,10 @@ jobs:
           python -m pip install -r tools/requirements-macos.txt
       - name: Fetch pinned native sources
         run: |
+          PIN=$(python -c "import sys; sys.path.insert(0, 'tools'); from build_xlate import mng_pin; print(mng_pin())")
           mkdir -p refs/MacNativeGames
           git -C refs/MacNativeGames init
-          git -C refs/MacNativeGames fetch --depth 1 https://github.com/ly05010419/MacNativeGames.git b75be8cfa704df3701e86130c8ced268e79d6b11
+          git -C refs/MacNativeGames fetch --depth 1 https://github.com/ly05010419/MacNativeGames.git "$PIN"
           git -C refs/MacNativeGames checkout FETCH_HEAD
       - name: Build both supported versions without game data
         run: |
