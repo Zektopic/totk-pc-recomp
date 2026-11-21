@@ -19,6 +19,7 @@ def main():
                         '-Wno-format', '-Wno-unused-parameter', '-Wno-unused-function',
                         '-I', str(runtime),
                         '-I', str(runtime.parent / 'third_party/d2r_gfx/gfx/nvn/include'),
+                        '-I', str(ROOT / 'runtime/macos'),
                         str(ROOT / 'tests/macos_thread_test.c'),
                         '-o', str(binary)], check=True)
         env = dict(os.environ)
