@@ -1,6 +1,24 @@
 # Architecture
 
-How the Switch build of *Tears of the Kingdom* becomes a native Windows x86-64 program. The upstream projects it builds on are listed under Credits in the [README](../README.md).
+The Windows target translates ARM64 to C and renders through Vulkan. The macOS target executes prepared ARM64 modules and renders through Metal 4. The upstream projects are listed under Credits in the [README](../README.md).
+
+## Apple Silicon
+
+`tools/macos/` exports the pinned MacNativeGames runtime into `build/macos-arm64/source`, applies `runtime/macos/patches`, and builds it with Apple Clang. The native path retains the upstream typed NVN/Metal interface, Darwin thread environment, audio and input services. It does not compile the Windows C-lift runtime. The two hosts currently share extraction, version identities, module placement policy and shader translator sources; their service implementations remain separate.
+
+`recomp/layout.py::native_layout` chooses native module addresses and accounts for rewritten code and main's private timing page. The loader checks sizes, hashes, permissions and address collisions. Guest x18/TLS and host call transitions use the pinned native rewriter's validation gates before game tables are generated.
+
+The macOS integration owns transactional save publication, the strict native-4K presentation policy, frame evidence and application packaging. App resources stay read-only. Saves, caches and logs use the user's Library folders. See [macOS](macos.md) for the build and acceptance boundary.
+
+The native render stream sends pass boundaries and draws directly to the Metal encode FIFO. Recorded NVN commands carry their recording incarnation and nested child scopes. `CallCommands` retains immutable child storage until final flattening, avoiding an intermediate body copy while preserving deferred-binding behavior and texture-pin lifetimes. This identity describes a command recording; it does not identify a game actor or establish a temporal rendering law.
+
+`periodic_owner.c` implements explicit owner programs independently of Metal. A participation owns its causal entry, local phase, resource bindings and invocation receipts. Only matching addressed returns can complete an action, and a changed dependency invalidates its dependent owners. This control model has no scene-owner integration yet. `periodic_gpu_encode.m` separately generates indirect draw commands from current renderer parameter rows. Each command buffer retains its generated commands and state until GPU completion; unsupported draws use the ordinary encoder with full state restoration. The path is opt-in through `TOTK_PERIODIC_GPU_ENCODE=1` and does not reduce the number of guest draws or authorize retained GPU output.
+
+`periodic_ui.m` captures ordered UI draws with immutable resolved inputs and publishes them only after an exact GPU comparison against the original canvas. This optional reference path provides composition over a supplied scene at unchanged UI coordinates. It does not supply that scene, certify closure, or replace scene rendering.
+
+`periodic_clock.c` keeps simulation progress, guest timesteps, anchor publication and presentation requests separate. The strict profile paces guest-rendered anchors at 48 Hz from the 144 Hz display clock and disables camera-only phases. Diagnostic `TOTK_PERIODIC_PHASE=1` lets `periodic_present.m` rotate a captured pre-UI canvas using the G-buffer camera's field of view and aspect ratio, with pixels changed by UI left at their original coordinates. The canvas snapshots and mouse generation belong to the queued anchor. This experiment retains an image rather than scene geometry: it cannot reconstruct newly exposed surfaces, advance actors or provide exact UI alpha. Its `camera` trace kind is excluded from rendered-state Hz and rejected for 4K/144 acceptance. Exact scene owners, complete geometry coverage and phase rasterization remain unimplemented, so the current strict cadence cannot deliver 144 correct world states per second.
+
+## Windows
 
 ## Starting points
 
@@ -61,7 +79,7 @@ MacNativeGames cannot run on x86-64 as is: its CPU path executes ARM64 code nati
   drawn into the swapchain image (`runtime/ui/`); their text is in `ui_text.c` (English, Russian, Brazilian Portuguese,
   Simplified Chinese). The Chinese glyphs come from a system font (Microsoft YaHei, `plat_font_path`) merged into the
   font atlas.
-- OS calls the host makes go through `runtime/platform/` (`platform.h`, `win32.c`), so a Linux or macOS host adds one file instead of touching the rest. The split is not finished: `tools/check_platform.py` lists the Win32 uses left in the other files.
+- OS calls the host makes go through `runtime/platform/` (`platform.h`, `win32.c`), so a Linux or macOS host adds one file instead of touching the rest. The split is not finished: `tools/check_platform.py` lists the Win32 uses left in the other files. The native Apple Silicon macOS target uses its separate Darwin host.
 
 #### Threads and cores
 

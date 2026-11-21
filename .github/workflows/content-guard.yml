@@ -1,7 +1,12 @@
 name: Content guard
 
+permissions:
+  contents: read
+
 on:
   push:
+    branches:
+      - main
   pull_request:
   workflow_dispatch:
 
@@ -9,10 +14,10 @@ jobs:
   check:
     runs-on: [self-hosted, manupa-hnx]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Configure Git safe directory
         run: git config --global --add safe.directory '*'
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: python tools/check_content.py

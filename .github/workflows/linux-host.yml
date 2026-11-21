@@ -1,28 +1,34 @@
 name: Linux host
 
+permissions:
+  contents: read
+
 # No game files here, by design: the generated C needs a dump, the runtime does not, so the compile gate is the check a
 # public CI runner can run. It compiles with the release's own toolchain -- the pinned LLVM, the sniper sysroot and
 # runtime/deps -- inside tools/linux/Dockerfile, so CI cannot pass on a toolchain the release does not use.
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
 jobs:
   compile-gate:
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, manupa-hnx]
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+
+      - name: Configure Git safe directory
+        run: git config --global --add safe.directory '*'
 
       - name: Build the pinned build image
         run: docker build -f tools/linux/Dockerfile -t totk-linux-build tools/linux
 
       # 1 GB of LLVM, the sniper sysroot and the runtime deps: downloaded once, then reused until the pins change.
       - name: Cache the release toolchain
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             build/ci-toolchain
@@ -30,16 +36,17 @@ jobs:
           key: totk-toolchain-${{ runner.os }}-${{ hashFiles('tools/make_release_linux.py') }}
 
       - name: Fetch the pinned toolchain
-        run: >
-          docker run --rm -v "$PWD:/src" -w /src totk-linux-build
-          python3 tools/make_release_linux.py --out build/ci-toolchain --fetch-toolchain
+        run: |
+          mkdir -p build/ci-toolchain toolchain/release-work
+          docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/src" -w /src totk-linux-build \
+            python3 tools/make_release_linux.py --out build/ci-toolchain --fetch-toolchain
 
       - name: Platform uses
-        run: docker run --rm -v "$PWD:/src" -w /src totk-linux-build python3 tools/check_platform.py
+        run: docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/src" -w /src totk-linux-build python3 tools/check_platform.py
 
       - name: Compile every runtime translation unit
         run: >
-          docker run --rm -v "$PWD:/src" -w /src totk-linux-build
+          docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/src" -w /src totk-linux-build
           python3 tools/ci/compile_gate.py --undefined
           --cc build/ci-toolchain/llvm/bin/clang
           --sysroot toolchain/release-work/sniper
@@ -47,7 +54,7 @@ jobs:
 
       - name: Tests that need no game files
         run: |
-          docker run --rm -v "$PWD:/src" -w /src totk-linux-build bash -c '
+          docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/src" -w /src totk-linux-build bash -c '
             set -e
             python3 tests/flags_check.py
             python3 tests/diff/simd.py
@@ -59,4 +66,4 @@ jobs:
       # so the gap stays visible, but do not fail the build on a defect this branch did not introduce.
       - name: Exclusive monitor ABA (fails on main too)
         continue-on-error: true
-        run: docker run --rm -v "$PWD:/src" -w /src totk-linux-build python3 tests/excl_mt.py
+        run: docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/src" -w /src totk-linux-build python3 tests/excl_mt.py

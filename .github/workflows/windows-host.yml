@@ -1,11 +1,14 @@
 name: Windows host
 
+permissions:
+  contents: read
+
 # The Windows file set compiles here; it cannot link without the generated modules, which need a dump. MSYS2 UCRT64
 # with the package list from docs/building.md, because a different clang is a different set of warnings-as-behaviour.
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -17,7 +20,7 @@ jobs:
       run:
         shell: msys2 {0}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: msys2/setup-msys2@v2
         with:

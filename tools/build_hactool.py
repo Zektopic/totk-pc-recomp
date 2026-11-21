@@ -1,10 +1,12 @@
-"""Build hactool: toolchain/hactool/hactool.exe (SciresM/hactool at a pinned commit + tools/hactool/*.patch).
+"""Build native hactool: toolchain/hactool/hactool[.exe] from pinned SciresM sources.
 
 Fetches the pinned commit into toolchain/src/hactool, resets it (local changes and build output there are discarded),
-applies portable.patch (MacNativeGames' Windows-relevant changes) and unicode.patch (ours), and builds a static exe
+applies portable.patch (MacNativeGames' extraction changes and our stdin/key parsing fixes) and unicode.patch,
+and builds a static exe
 with MSYS2 UCRT64 gcc; mbedtls comes with hactool's tree. The exe and hactool's LICENSE go to toolchain/hactool, where
 tools/extract.py and tools/make_release.py take them. Run with .venv. On Linux: the system's cc and make build
-toolchain/hactool/hactool (unicode.patch only adds a Windows manifest, under EXEEXT .exe).
+toolchain/hactool/hactool (unicode.patch only adds a Windows manifest, under EXEEXT .exe). macOS uses Apple Clang ARM64,
+the bundled mbedtls, and only portable.patch; the Unicode resource patch is Windows-only.
 
   python tools/build_hactool.py [--src DIR] [--out DIR]
 """
@@ -54,19 +56,25 @@ def main():
     ap.add_argument('--cc', help='Linux: the C compiler command for hactool and its bundled mbedtls, for example '
                                  '"clang --sysroot=DIR" (tools/make_release_linux.py); default cc')
     args = ap.parse_args()
+    native_mac = sys.platform == 'darwin'
     if WIN and not MSYS_BASH.is_file():
         sys.exit(f'{MSYS_BASH} not found: install MSYS2 with the UCRT64 gcc and make (docs/building.md)')
-    if not WIN and not (shutil.which('make') and (args.cc or shutil.which('cc'))):
+    if not WIN and not (shutil.which('make') and (args.cc or shutil.which('clang' if native_mac else 'cc'))):
         sys.exit('make and cc not found: install a C compiler and make (docs/building.md)')
     src, out = args.src.resolve(), args.out.resolve()
 
     fetch(src)
-    for p in PATCHES:
+    patches = PATCHES[:1] if native_mac else PATCHES
+    for p in patches:
         git(src, 'apply', '--whitespace=nowarn', str(p))
-    config = CONFIG_MK.replace('CC = cc\n', f'CC = {args.cc}\n') if args.cc else CONFIG_MK
+    if native_mac:
+        config = ('CC = clang\nEXEEXT =\nCFLAGS = -O2 -arch arm64 -mmacosx-version-min=26.0 -std=gnu11\n'
+                  'LDFLAGS = -lmbedtls -lmbedx509 -lmbedcrypto\n')
+    else:
+        config = CONFIG_MK.replace('CC = cc\n', f'CC = {args.cc}\n') if args.cc else CONFIG_MK
     (src / 'config.mk').write_text(config, encoding='utf-8', newline='\n')
 
-    jobs = f'-j{os.cpu_count() or 4}'
+    jobs = f'-j{min(os.cpu_count() or 4, 16)}' if native_mac else f'-j{os.cpu_count() or 4}'
     if WIN:
         env = dict(os.environ, MSYSTEM='UCRT64', CHERE_INVOKING='1')
         r = subprocess.run([str(MSYS_BASH), '-lc', f'make {jobs}'], cwd=src, env=env, capture_output=True, text=True)
@@ -87,7 +95,7 @@ def main():
         banner = subprocess.run([str(out / EXE)], capture_output=True, text=True, env=env)
     if 'hactool (c) SciresM' not in banner.stdout + banner.stderr:
         sys.exit(f'{out / EXE} does not start')
-    print(f'{out / EXE}: {COMMIT[:7]} + {", ".join(p.name for p in PATCHES)}')
+    print(f'{out / EXE}: {COMMIT[:7]} + {", ".join(p.name for p in patches)}')
 
 
 if __name__ == '__main__':
