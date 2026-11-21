@@ -147,18 +147,40 @@ def fetch(name):
     # into <name>.part, renamed once complete: a cut connection leaves a .part that the next run resumes, never a
     # short file under the final name
     part = path.with_name(path.name + '.part')
-    have = part.stat().st_size if part.is_file() else 0
-    print(f'download {url}' + (f' (resuming at {have} bytes)' if have else ''))
-    req = urllib.request.Request(url, headers={'Range': f'bytes={have}-'} if have else {})
-    try:
-        with urllib.request.urlopen(req) as r:
-            if have and r.status != 206:   # the server ignored the range: start over
-                have = 0
-            with open(part, 'ab' if have else 'wb') as f:
-                shutil.copyfileobj(r, f)
-    except urllib.error.HTTPError as e:
-        if e.code != 416:   # 416: the .part already holds the whole file
-            raise
+    for attempt in range(16):
+        have = part.stat().st_size if part.is_file() else 0
+        print(f'download {url}' + (f' (resuming at {have} bytes)' if have else ''), flush=True)
+        req = urllib.request.Request(url, headers={'Range': f'bytes={have}-'} if have else {})
+        expected = None
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                if have and r.status != 206:   # the server ignored the range: start over
+                    have = 0
+                cl = r.headers.get('Content-Length')
+                if cl and cl.isdigit() and not r.headers.get('Content-Encoding'):
+                    expected = have + int(cl)
+                with open(part, 'ab' if have else 'wb') as f:
+                    shutil.copyfileobj(r, f)
+        except urllib.error.HTTPError as e:
+            if e.code == 416:   # 416: the .part already holds the whole file
+                break
+            if attempt == 15:
+                raise
+            print(f'{path.name}: HTTP {e.code}; retrying...', flush=True)
+            time.sleep(3)
+            continue
+        except Exception as e:
+            if attempt == 15:
+                raise
+            print(f'{path.name}: {e}; resuming...', flush=True)
+            time.sleep(3)
+            continue
+        got_size = part.stat().st_size if part.is_file() else 0
+        if expected is not None and got_size < expected:
+            print(f'{path.name}: truncated at {got_size}/{expected} bytes; resuming...', flush=True)
+            time.sleep(3)
+            continue
+        break
     part.replace(path)
     got = sha256_file(path)
     if got != want:
