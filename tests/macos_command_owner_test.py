@@ -10,7 +10,7 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
-from build_xlate import mng_pin
+from macos.build import MACOS_MNG_PIN
 
 
 def section(source, start, end):
@@ -31,7 +31,7 @@ def main():
             # Export only source files in an isolated directory. This test must
             # never replace the source tree of a concurrent game build.
             archive = subprocess.check_output(['git', '-C', ROOT / 'refs/MacNativeGames',
-                'archive', mng_pin(), 'games/totk/third_party/d2r_gfx/gfx/nvn'])
+                'archive', MACOS_MNG_PIN, 'games/totk/third_party/d2r_gfx/gfx/nvn'])
             with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
                 tar.extractall(work, filter='data')
             for patch in sorted((ROOT / 'runtime/macos/patches').glob('*.patch')):

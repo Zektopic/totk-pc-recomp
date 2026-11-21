@@ -26,9 +26,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'tools'))
-from build_xlate import mng_pin
 from check_content import GENERATED_MARKER
 
+MACOS_MNG_PIN = 'b75be8cfa704df3701e86130c8ced268e79d6b11'
 REF = ROOT / 'refs/MacNativeGames'
 INTEGRATION = ROOT / 'runtime/macos'
 BUILD = ROOT / 'build/macos-arm64'
@@ -123,7 +123,7 @@ def preserve_generated_source_outputs(tree, previous):
 
 def _stage_sources():
     """Export committed inputs, ignoring local modifications in the reference checkout."""
-    pin = mng_pin()
+    pin = MACOS_MNG_PIN
     if not REF.is_dir():
         raise RuntimeError('refs/MacNativeGames is missing; run tools/fetch_refs.sh')
     patches = sorted((INTEGRATION / 'patches').glob('*.patch'))
@@ -279,7 +279,7 @@ def compile_runtime(tree, out, version, jobs, probes):
     write(out / 'build-info.json', json.dumps({'target': 'macos-arm64', 'version': version, 'inputs': inputs,
           'libraries': {str(p): digest(p) for p in libs},
           'compiler': compiler.splitlines()[0], 'sdk': sdk, 'sdk_build': sdk_build,
-          'upstream': mng_pin(), 'source_id': (tree.parent.parent / '.source-id').read_text(),
+          'upstream': MACOS_MNG_PIN, 'source_id': (tree.parent.parent / '.source-id').read_text(),
           'probe_only': probes, 'binary_sha256': digest(binary)}, indent=2) + '\n')
     return binary
 
