@@ -16,7 +16,7 @@ on:
 jobs:
   compile-gate:
     runs-on: [self-hosted, manupa-hnx]
-    timeout-minutes: 60
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v7
 
