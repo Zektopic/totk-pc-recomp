@@ -1,0 +1,25 @@
+name: Amiibo checks
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: [self-hosted, manupa-hnx]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Configure Git safe directory
+        run: git config --global --add safe.directory '*'
+      - name: Build the pinned build image
+        run: docker build -f tools/linux/Dockerfile -t totk-linux-build tools/linux
+      - name: Run Amiibo checks
+        run: >
+          docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/src" -w /src totk-linux-build
+          python3 tests/amiibo_check.py --cc clang --cxx clang++

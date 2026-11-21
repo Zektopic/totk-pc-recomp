@@ -113,9 +113,9 @@ LLVM_SKIP_SUFFIXES = {'.idl', '.tlb'}
 
 # tools/ files the installer steps run (and what they import), copied from the repo.
 TOOLS_FILES = ['build_game.py', 'build_shaders.py', 'button_icons.py', 'check_content.py', 'check_isa.py', 'extract.py',
-               'hostmem.py', 'make_romfs_patches.py', 'ncz.py', 'pack_shader_cache.py', 'prepare_shaders.py',
-               'romfs_index.py', 'shader_census.py', 'shader_list.py', 'ultrawide_layout.py', 'cheats.py',
-               'exefs_patches.py']
+               'game_inputs.py', 'hostmem.py', 'make_romfs_patches.py', 'ncz.py', 'pack_shader_cache.py',
+               'prepare_shaders.py', 'romfs_index.py', 'shader_census.py', 'shader_list.py', 'ultrawide_layout.py',
+               'cheats.py', 'exefs_patches.py']
 TOOLS_DIRS = ['vendor/macnativegames', 'data']   # data/: expected hashes
 RUNTIME_SUFFIXES = {'.h', '.inc', '.ico'}   # .ico: the installer window icon
 
@@ -147,18 +147,40 @@ def fetch(name):
     # into <name>.part, renamed once complete: a cut connection leaves a .part that the next run resumes, never a
     # short file under the final name
     part = path.with_name(path.name + '.part')
-    have = part.stat().st_size if part.is_file() else 0
-    print(f'download {url}' + (f' (resuming at {have} bytes)' if have else ''))
-    req = urllib.request.Request(url, headers={'Range': f'bytes={have}-'} if have else {})
-    try:
-        with urllib.request.urlopen(req) as r:
-            if have and r.status != 206:   # the server ignored the range: start over
-                have = 0
-            with open(part, 'ab' if have else 'wb') as f:
-                shutil.copyfileobj(r, f)
-    except urllib.error.HTTPError as e:
-        if e.code != 416:   # 416: the .part already holds the whole file
-            raise
+    for attempt in range(16):
+        have = part.stat().st_size if part.is_file() else 0
+        print(f'download {url}' + (f' (resuming at {have} bytes)' if have else ''), flush=True)
+        req = urllib.request.Request(url, headers={'Range': f'bytes={have}-'} if have else {})
+        expected = None
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                if have and r.status != 206:   # the server ignored the range: start over
+                    have = 0
+                cl = r.headers.get('Content-Length')
+                if cl and cl.isdigit() and not r.headers.get('Content-Encoding'):
+                    expected = have + int(cl)
+                with open(part, 'ab' if have else 'wb') as f:
+                    shutil.copyfileobj(r, f)
+        except urllib.error.HTTPError as e:
+            if e.code == 416:   # 416: the .part already holds the whole file
+                break
+            if attempt == 15:
+                raise
+            print(f'{path.name}: HTTP {e.code}; retrying...', flush=True)
+            time.sleep(3)
+            continue
+        except Exception as e:
+            if attempt == 15:
+                raise
+            print(f'{path.name}: {e}; resuming...', flush=True)
+            time.sleep(3)
+            continue
+        got_size = part.stat().st_size if part.is_file() else 0
+        if expected is not None and got_size < expected:
+            print(f'{path.name}: truncated at {got_size}/{expected} bytes; resuming...', flush=True)
+            time.sleep(3)
+            continue
+        break
     part.replace(path)
     got = sha256_file(path)
     if got != want:
@@ -320,6 +342,10 @@ def check_translator():
 def build_bin(out):
     b = out / 'bin'
     b.mkdir(parents=True, exist_ok=True)
+    # The extractor and hactool share a stdin ticket protocol. Rebuild from
+    # this checkout so a cached executable cannot silently use the old one.
+    subprocess.run([sys.executable, str(ROOT / 'tools/build_hactool.py'),
+                    '--out', str(MAIN_ROOT / 'toolchain/hactool')], check=True)
     for f in ('totk_xlate.exe', 'totk_xlate.id'):
         shutil.copy2(MAIN_ROOT / 'build' / 'xlate' / f, b / f)
     shutil.copy2(MAIN_ROOT / 'toolchain' / 'hactool' / 'hactool.exe', b / 'hactool.exe')
