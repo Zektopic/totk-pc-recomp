@@ -17,7 +17,9 @@ jobs:
       - uses: actions/checkout@v7
       - name: Configure Git safe directory
         run: git config --global --add safe.directory '*'
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.12"
-      - run: python tests/amiibo_check.py --cc clang --cxx clang++
+      - name: Build the pinned build image
+        run: docker build -f tools/linux/Dockerfile -t totk-linux-build tools/linux
+      - name: Run Amiibo checks
+        run: >
+          docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/src" -w /src totk-linux-build
+          python3 tests/amiibo_check.py --cc clang --cxx clang++

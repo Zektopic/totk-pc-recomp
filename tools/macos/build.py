@@ -180,7 +180,7 @@ def library_prefix(name, archive):
         info = subprocess.check_output(['otool', '-l', lib], text=True)
         versions = re.findall(r'\bminos\s+(\d+(?:\.\d+)*)', info)
         if versions and all(tuple((list(map(int, v.split('.'))) + [0, 0])[:3]) <= (26, 0, 0) for v in versions):
-            run(['lipo', '-verify_arch', 'arm64', lib], stdout=subprocess.DEVNULL)
+            run(['lipo', lib, '-verify_arch', 'arm64'], stdout=subprocess.DEVNULL)
             return prefix
     raise RuntimeError(f'{name}: need an arm64 {archive} built with MACOSX_DEPLOYMENT_TARGET=26.0')
 

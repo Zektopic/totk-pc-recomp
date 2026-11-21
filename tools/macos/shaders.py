@@ -147,7 +147,7 @@ def build_tools(tree, jobs):
         write(cross_stamp, cross_identity)
     link(tree / 'build/spirv-cross', out)
     for executable in (service, binary):
-        run(['lipo', '-verify_arch', 'arm64', executable])
+        run(['lipo', executable, '-verify_arch', 'arm64'])
         dependencies = subprocess.check_output(['otool', '-L', executable], text=True).splitlines()[1:]
         if any(not line.strip().startswith(('/usr/lib/', '/System/Library/')) for line in dependencies):
             raise RuntimeError(f'Native helper has an unbundled dependency: {executable}')
